@@ -1,0 +1,88 @@
+	* Single operand instruction set reference by Hamaz Hamza
+	* order of registers:
+		8-bit = al, cl, dl, bl, ah, ch, dh, bh
+		16/32 bit = a gen, c gen, d gen, b gen, s pointer, b pointer, s index, d index
+	* all means in order mentioned above
+
+******* [inc]
+	reg8 opcode = FE
+	all - C0 to C7
+
+	reg16 opcode = different for each register
+	66 override is added
+	all - 40 to 47
+
+	reg32 opcode = same as above but with no override
+
+	mem8 - FE_05_mem location
+	mem16 - 66_FF_05_mem location
+	mem32 - FF_05_mem location
+
+
+
+******* [dec]
+	reg8 opcode = FE
+	all - C8 to CF
+
+	reg16 opcode = different for each register
+	66 override is added
+	all - 48 to 4F
+
+	reg32 opcode = same as above but with no override
+
+	mem8 - FE_0D_mem location
+	mem16 - 66_FF_0D_mem location
+	mem32 - FF_0D_mem location
+
+
+
+******* [not]
+	reg8 opcode = F6
+	all - D0 to D7
+
+	reg16 opcode = F7
+	66 override is added
+	all - D0 to D7
+
+	reg32 opcode = same as above but with no override
+
+	mem8 - F6_15_mem location
+	mem16 - 66_F7_15_mem location
+	mem32 - F7_15_mem location
+
+
+
+******* [neg]
+	reg8 opcode = F6
+	all - D8 to DF
+
+	reg16 opcode = F7
+	66 override is added
+	all - D8 to DF
+
+	reg32 opcode = same as above but with no override
+
+	mem8 - F6_1D_mem location
+	mem16 - 66_F7_1D_mem location
+	mem32 - F7_1D_mem location
+
+
+
+******* [pop]
+
+	reg16 opcode = different for each register
+	66 override is added
+	all - 58 to 5F
+
+	reg32 opcode = same as above but with no override
+
+	mem16 - 66_8F_05_mem location
+	mem32 - 8F_05_mem location
+
+	* special cases:
+	pop es - 07
+	pop ss - 17
+	pop fs - 0F A1
+	pop gs - 0F A9
+	pop ds - 1F
+	 

@@ -1,0 +1,1012 @@
+
+; COAL Assignment 1: Assembler and Disassembler
+; BSCS-11C
+; 25th December 2022
+; Group members:
+;     1. Hamaz Hamza    CMS: 365670
+;     2. Syed Hamza Ali CMS: 396358
+;     3. Omer Farooq    CMS: 377187
+
+
+include irvine32.inc
+
+compare macro buffer:req, startingAddress:req, numberOfBits:req, text:req		; compares a string buffer with string immediate
+																				; bl acts as a returning boolean variable
+	local string, compareBits, return
+	.data
+		string byte text, 0
+	.code
+		push edx
+		push edi
+		push eax
+
+		mov bl, 0
+
+		mov edx, offset buffer
+		mov edi, offset string
+
+		mov eax, startingAddress
+		add edx, eax
+
+		mov ecx, numberOfBits
+		compareBits:
+			mov al, [edx]
+			mov ah, [edi]
+			cmp al, ah
+			jne return
+
+			inc edx
+			inc edi
+			loop compareBits
+
+		mov bl, 1
+			
+		return:
+			pop eax
+			pop edi
+			pop edx
+endm
+
+
+printl macro text:req									; Write string immediate and go to new line
+	local string
+	.data
+		string byte text, 0
+	.code
+		push edx
+		mov	edx, offset string
+		call writeString
+		call crlf
+		pop	edx
+endm
+
+
+print macro text:req									; Write string immediate
+	local string
+	.data
+		string byte text, 0
+	.code
+		push edx
+		mov	edx, offset string
+		call writeString
+		pop	edx
+endm
+
+.data
+;-----------------[Variables & Constants]-----------------
+
+;===(Registers)===
+eightBitRegs byte     "al",0,  "cl",0,  "dl",0,  "bl",0,  "ah",0,  "ch",0,  "dh",0,  "bh",0
+sixteenBitRegs byte   "ax",0,  "cx",0,  "dx",0,  "bx",0,  "sp",0,  "bp",0,  "si",0,  "di",0
+thirtyTwoBitRegs byte "eax",0, "ecx",0, "edx",0, "ebx",0, "esp",0, "ebp",0, "esi",0, "edi",0
+
+;===(main variables)===
+reg byte 1
+operandSize byte 2		; 0 = 8 bit, 1 = 16 bit, 2 = 32 bit
+inputLen byte 0
+inputStr byte 128 DUP(0)
+input byte ?
+
+;--------------------------[End]--------------------------
+
+.code
+Main proc
+;-----------------------[Main Code]-----------------------
+
+call crlf
+printl "<---Intel x86 Processor Instruction Assembler & Disassembler--->"
+printl "Currently running in 32-bit mode"
+printl "Supported instructions: inc, dec, not, neg, pop"
+
+start:
+	call crlf
+	printl "Enter 1 for assembler or 2 for disassembler:"
+	call readint
+	cmp eax, 1
+	je assembler
+	cmp eax, 2
+	je disassembler
+	printl "Incorrect input. Please try again."
+	jmp start
+
+assembler:
+	printl "Enter a valid assembly language instruction:"
+	call getInput
+
+	mov al, inputLen
+	cmp al, 6			; valid instructions are more than 5 characters in length
+	jnl assemble
+	call invalid
+	
+	assemble:
+		cmp al, 6
+		je notThirtyTwoBit
+		jmp checkInstruction
+
+		notThirtyTwoBit:
+			call checkSpecialAssembler
+			compare inputStr, 5, 1, "h"
+			cmp bl, 1
+			je eightbits
+			compare inputStr, 5, 1, "l"
+			cmp bl, 1
+			je eightBits
+			mov operandSize, 1
+			jmp checkInstruction
+
+		eightBits: 
+			mov operandSize, 0
+
+		checkInstruction:
+			call getRegister
+			mov esi, 8			; convert reverse index into correct index
+			sub esi, ecx
+			
+			compare inputStr, 0, 3, "inc"
+			cmp bl, 1
+			je incInstruction
+			compare inputStr, 0, 3, "dec"
+			cmp bl, 1
+			je decInstruction
+			compare inputStr, 0, 3, "not"
+			cmp bl, 1
+			je notInstruction
+			compare inputStr, 0, 3, "neg"
+			cmp bl, 1
+			je negInstruction
+			compare inputStr, 0, 3, "pop"
+			cmp bl, 1
+			je popInstruction
+			call invalid
+
+			incInstruction:
+				mov al, operandSize
+				cmp al, 1
+				je inc16reg
+				cmp al, 2
+				je inc32reg
+
+				print "FEC"
+				call printReg
+				call crlf
+				call jumpToStart
+
+				inc16reg:
+					print "66"
+				inc32reg:
+					print "4"
+					call printReg
+					call crlf
+					call jumpToStart
+
+			decInstruction:
+				mov al, operandSize
+				cmp al, 1
+				je dec16reg
+				cmp al, 2
+				je dec32reg
+
+				print "FEC"
+				add esi, 8
+				call printReg
+				call crlf
+				call jumpToStart
+
+				dec16reg:
+					print "66"
+				dec32reg:
+					print "4"
+					add esi, 8
+					call printReg
+					call crlf
+					call jumpToStart
+
+			notInstruction:
+				mov al, operandSize
+				cmp al, 1
+				je not16reg
+				cmp al, 2
+				je not32reg
+
+				print "F6D"
+				call printReg
+				call crlf
+				call jumpToStart
+
+				not16reg:
+					print "66"
+				not32reg:
+					print "F7D"
+					call printReg
+					call crlf
+					call jumpToStart
+
+			negInstruction:
+				mov al, operandSize
+				cmp al, 1
+				je neg16reg
+				cmp al, 2
+				je neg32reg
+
+				print "F6D"
+				add esi, 8
+				call printReg
+				call crlf
+				call jumpToStart
+
+				neg16reg:
+					print "66"
+				neg32reg:
+					print "F7D"
+					add esi, 8
+					call printReg
+					call crlf
+					call jumpToStart
+
+			popInstruction:
+				mov al, operandSize
+				cmp al, 1
+				je pop16reg
+				cmp al, 2
+				je pop32reg
+
+				call invalid
+
+				pop16reg:
+					print "66"
+				pop32reg:
+					print "5"
+					add esi, 8
+					call printReg
+					call crlf
+					call jumpToStart
+
+	call jumpToStart
+
+disassembler:
+	printl "Enter a valid machine language instruction:"
+	call getInput
+
+	mov al, inputLen
+	cmp al, 2				; valid instructions are more than 1 character in length
+	jnl convertToUpper
+	call invalid
+
+	; we must convert string input to hexadecimal
+
+	convertToUpper: 
+		call convertToUppercase
+
+	movzx ax, inputLen
+	mov bl, 2
+	div bl
+	mov inputLen, al
+	movzx ecx, al
+	mov esi, 0
+	mov edi, 0	; edi acts as a pointer to the current byte we are accessing from the input
+
+	convert:
+		mov bl, inputStr[esi]
+		call convertToHex
+		mov al, bl
+		inc esi
+
+		mov bl, inputStr[esi]
+		call convertToHex
+		inc esi
+
+		call appendToInput
+		loop convert
+
+	; now we find the correct output
+
+	mov al, inputLen
+	cmp al, 6
+	jne checkOperandSize
+	mov reg, 0
+
+	checkOperandSize:
+		mov edi, 0   ; edi acts as a pointer to the current byte we are accessing from the input
+
+		mov al, input[edi]
+		cmp al, 66h
+		jne checkIf8bit
+		mov operandSize, 1
+		inc edi
+		jmp checkIf32bit
+
+		checkIf8bit:
+			cmp al, 0FEh 
+			je eightBit
+			cmp al, 0F6h
+			je eightBit
+
+		checkIf32bit:
+			mov al, input[edi]
+			cmp al, 0FFh
+			je incEdi
+			cmp al, 0F7h
+			je incEdi
+			cmp al, 8Fh
+			je incEdi
+			jmp continueDecoding
+
+			incEdi:
+				inc edi
+				jmp continueDecoding
+
+			eightBit:
+				mov operandSize, 0
+				inc edi
+
+	continueDecoding:
+		mov al, input[edi]
+
+		cmp al, 05h				; check increment memory condition or pop memory condition
+		jne other
+		dec edi
+		mov bl, input[edi]
+		inc edi
+		cmp bl, 08Fh
+		jne incMem
+		jmp popMem
+
+		other:
+		mov bl, 0C0h
+		mov cl, 0C7h
+		call isInRange
+		cmp si, 1
+		je incReg8
+
+		mov bl, 040h
+		mov cl, 047h
+		call isInRange
+		cmp si, 1
+		je incNotReg8
+
+		cmp al, 0Dh
+		je decMem
+
+		mov bl, 0C8h
+		mov cl, 0CFh
+		call isInRange
+		cmp si, 1
+		je decReg8
+
+		mov bl, 048h
+		mov cl, 04Fh
+		call isInRange
+		cmp si, 1
+		je decNotReg8
+
+		cmp al, 15h
+		je notMem
+
+		mov bl, 0D0h
+		mov cl, 0D7h
+		call isInRange
+		cmp si, 1
+		je notReg
+
+		cmp al, 1Dh
+		je negMem
+
+		mov bl, 0D8h
+		mov cl, 0DFh
+		call isInRange
+		cmp si, 1
+		je negReg
+
+		cmp al, 05h
+		je popMem
+
+		mov bl, 58h
+		mov cl, 5Fh
+		call isInRange
+		cmp si, 1
+		je popReg
+
+		call checkSpecialCases
+
+		incMem:
+			print "inc ["
+			call printMemory
+			print "]"
+			call crlf
+			call jumpToStart
+
+		incReg8:
+			print "inc "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0C0h
+			mul bl
+			mov edx, offset eightBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		incNotReg8: 
+			mov bl, operandSize
+			cmp bl, 2
+			je incReg32
+
+		incReg16:
+			print "inc "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 40h
+			mul bl
+			mov edx, offset sixteenBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		incReg32:
+			print "inc "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 4
+			sub al, 40h
+			mul bl
+			mov edx, offset thirtyTwoBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		decMem:
+			print "dec ["
+			call printMemory
+			print "]"
+			call crlf
+			call jumpToStart
+
+		decReg8:
+			print "dec "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0C8h
+			mul bl
+			mov edx, offset eightBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		decNotReg8: 
+			mov bl, operandSize
+			cmp bl, 2
+			je decReg32
+
+		decReg16:
+			print "dec "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 48h
+			mul bl
+			mov edx, offset sixteenBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		decReg32:
+			print "dec "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 4
+			sub al, 48h
+			mul bl
+			mov edx, offset thirtyTwoBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		notMem: 
+			print "not ["
+			call printMemory
+			print "]"
+			call crlf
+			call jumpToStart
+
+		notReg: 
+			mov bl, operandSize
+			cmp bl, 1
+			je notReg16
+			cmp bl, 2
+			je notReg32
+
+		notReg8:
+			print "not "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0D0h
+			mul bl
+			mov edx, offset eightBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		notReg16:
+			print "not "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0D0h
+			mul bl
+			mov edx, offset sixteenBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		notReg32:
+			print "not "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 4
+			sub al, 0D0h
+			mul bl
+			mov edx, offset thirtyTwoBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+			
+
+		negMem: 
+			print "neg ["
+			call printMemory
+			print "]"
+			call crlf
+			call jumpToStart
+
+		negReg: 
+			mov bl, operandSize
+			cmp bl, 1
+			je negReg16
+			cmp bl, 2
+			je negReg32
+
+		negReg8:
+			print "neg "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0D8h
+			mul bl
+			mov edx, offset eightBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		negReg16:
+			print "neg "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 0D8h
+			mul bl
+			mov edx, offset sixteenBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		negReg32:
+			print "neg "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 4
+			sub al, 0D8h
+			mul bl
+			mov edx, offset thirtyTwoBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		popMem:
+			print "pop ["
+			call printMemory
+			print "]"
+			call crlf
+			call jumpToStart
+
+		popReg: 
+			mov bl, operandSize
+			cmp bl, 2
+			je popReg32
+
+		popReg16:
+			print "pop "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 3
+			sub al, 58h
+			mul bl
+			mov edx, offset sixteenBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+
+		popReg32:
+			print "pop "
+			mov eax, 0
+			mov al, input[edi]
+			mov bl, 4
+			sub al, 58h
+			mul bl
+			mov edx, offset thirtyTwoBitRegs
+			add edx, eax
+			call writestring
+			call crlf
+			call jumpToStart
+			
+;--------------------------[End]--------------------------
+call crlf
+call jumpToStart
+;-----------------------[Procedures]----------------------
+
+getInput proc					; take string input from the user
+	mov edx, offset inputStr
+	mov ecx, 128
+	call readstring
+	mov inputLen, al
+	ret
+getInput endp
+
+getRegister proc			; get the index of the matching register from the appropriate register array
+							; returning ecx contains the opposite index
+	mov al, operandSize
+	cmp al, 2
+	je thirtyTwoBit
+	cmp al, 1
+	je sixteenBit
+
+	mov edi, offset eightBitRegs
+	mov esi, 3
+	call find
+	ret
+
+	sixteenBit:
+		mov edi, offset sixteenBitRegs
+		mov esi, 3
+		call find
+		ret
+
+	thirtyTwoBit:
+		mov edi, offset thirtyTwoBitRegs
+		mov esi, 4
+		call find
+		ret
+
+getRegister endp
+
+find proc				; loops through the array and checks each element with the inputted register to get the reverse index
+						; returning ecx contains the reverse index
+	mov ecx, 8
+	mov edx, offset inputStr
+	add edx, 4
+	looop:
+		push ecx
+		mov ecx, esi
+		dec ecx
+		call check
+		pop ecx
+		cmp al, 1
+		je return
+		add edi, esi
+		loop looop
+		call invalid
+
+		return:
+			ret
+find endp
+
+check proc		; check the inputted register with a specified register from an array
+				; returning al acts as a boolean variable
+	push edx
+	push edi
+	looop:
+		mov al, [edx]
+		mov bl, [edi]
+		inc edx
+		inc edi
+		cmp al, bl
+		jne notEqual
+		loop looop
+
+		mov al, 1
+		pop edi
+		pop edx
+		ret
+		notEqual:
+			mov al, 0
+			pop edi
+			pop edx
+			ret
+check endp
+
+printReg proc		; prints the value of esi in hex
+	cmp esi, 0
+	jne next
+	print "0"
+	ret
+
+	next:
+		cmp esi, 1
+		jne next1
+		print "1"
+		ret
+
+	next1:
+		cmp esi, 2
+		jne next2
+		print "2"
+		ret
+
+	next2:
+		cmp esi, 3
+		jne next3
+		print "3"
+		ret
+
+	next3:
+		cmp esi, 4
+		jne next4
+		print "4"
+		ret
+
+	next4:
+		cmp esi, 5
+		jne next5
+		print "5"
+		ret
+
+	next5:
+		cmp esi, 6
+		jne next6
+		print "6"
+		ret
+
+	next6:
+		cmp esi, 7
+		jne next7
+		print "7"
+		ret
+
+	next7:
+		cmp esi, 8
+		jne next8
+		print "8"
+		ret
+
+	next8:
+		cmp esi, 9
+		jne next9
+		print "9"
+		ret
+
+	next9:
+		cmp esi, 10
+		jne next10
+		print "A"
+		ret
+
+	next10:
+		cmp esi, 11
+		jne next11
+		print "B"
+		ret
+
+	next11:
+		cmp esi, 12
+		jne next12
+		print "C"
+		ret
+
+	next12:
+		cmp esi, 13
+		jne next13
+		print "D"
+		ret
+
+	next13:
+		cmp esi, 14
+		jne next14
+		print "E"
+		ret
+
+	next14:
+		cmp esi, 15
+		jne endproc
+		print "F"
+		endproc:
+		ret
+printReg endp
+
+convertToUpperCase proc		; converts input string contained in inputStr to uppercase
+	movzx ecx, inputLen
+	mov ebx, 0
+
+	looop:
+		mov al, inputStr[ebx]
+		cmp al, 60h
+		jng continue
+		sub al, 20h
+		mov inputStr[ebx], al
+		
+		continue:
+			inc ebx
+			loop looop
+
+	ret
+convertToUpperCase endp
+
+convertToHex proc		; converts string to hexadecimal
+						; bl contains hex value
+	sub bl, 30h
+	cmp bl, 10h
+	jng return
+	sub bl, 7
+	return:
+	ret
+convertToHex endp
+
+appendToInput proc ;al contains msb, bl contains lsb, converted hex digits are added to the input variable
+	shl al, 4
+	add al, bl
+	mov input[edi], al
+	inc edi
+	ret
+appendToInput endp
+
+isInRange proc		; checks if a value in al, is in the range specified
+					; bl contains min range and cl contains max range
+					; returning si acts as a boolean
+	push edx
+
+	mov dl, al
+	cmp dl, bl
+	jl no
+
+	cmp dl, cl
+	jg no
+	mov si, 1
+	jmp return
+
+	no:
+		mov si, 0
+
+	return:
+		pop edx
+	ret
+isInRange endp
+
+printMemory proc				; prints the memory address portion of a machine language instruction
+	mov edx, offset inputStr
+	add edx, edi
+	add edx, edi
+	add edx, 2
+	call writestring
+	print "h"
+	ret
+printMemory endp
+
+checkSpecialAssembler proc			; checks if the assembly instruction is a special pop instruction
+									; prints correct machine instruction if yes, returns if no
+	compare inputStr, 0, 3, "pop"
+	cmp bl, 1
+	jne return
+
+	compare inputStr, 4, 2, "es"
+	cmp bl, 1
+	jne next
+	printl "07"
+	call jumpToStart
+
+	next:
+		compare inputStr, 4, 2, "ss"
+		cmp bl, 1
+		jne next1
+		printl "17"
+		call jumpToStart
+
+	next1:
+		compare inputStr, 4, 2, "fs"
+		cmp bl, 1
+		jne next2
+		printl "0FA1"
+		call jumpToStart
+
+	next2:
+		compare inputStr, 4, 2, "gs"
+		cmp bl, 1
+		jne next3
+		printl "0FA9"
+		call jumpToStart
+
+	next3:
+		compare inputStr, 4, 2, "ds"
+		cmp bl, 1
+		jne return
+		printl "1F"
+		call jumpToStart
+
+	return:
+	ret
+checkSpecialAssembler endp
+
+checkSpecialCases proc				; checks if the machine instruction is a special pop instruction
+									; prints correct assembly instruction if yes, exits if no
+	cmp al, 07h
+	jne next
+	print "pop es"
+	call crlf
+	call jumpToStart
+
+	next:
+		cmp al, 17h
+		jne next2
+		print "pop ss"
+		call crlf
+		call jumpToStart
+
+	next2:
+		cmp al, 1Fh
+		jne next3
+		print "pop ds"
+		call crlf
+		call jumpToStart
+
+	next3:
+		cmp al, 0Fh
+		jne notCorrect
+
+	next4:
+		inc edi
+		mov al, input[edi]
+		cmp al, 0A1h
+		jne next5
+		print "pop fs"
+		call crlf
+		call jumpToStart
+
+	next5:
+		cmp al, 0A9h
+		jne notCorrect
+		print "pop gs"
+		call crlf
+		call jumpToStart
+
+		notCorrect:
+checkSpecialCases endp
+
+invalid proc	; is called when input is invalid or unsupported
+	call crlf
+	printl "Your instruction was either incorrect or not supported"
+	printl "Please contact developers for support or further information"
+invalid endp
+
+jumpToStart proc
+jumpToStart endp
+
+;--------------------------[End]---------------------------
+call crlf
+jmp start
+
+Main endp
+end main
